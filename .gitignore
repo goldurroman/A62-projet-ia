@@ -1,1 +1,32 @@
 /data
+# Environnements virtuels
+venv-mlflow/
+venv-dvc/
+venv-streamlit/
+
+# Artefacts YOLO
+models/runs/
+
+# Artefacts MLflow
+mlruns/
+mlflow.db
+
+# Fichiers temporaires
+__pycache__/
+*.pyc
+*.pyo
+*.tmp
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PyCharm
+.idea/
+
+# Windows junk
+models.lnk
+python.bat
+python310.exe
+

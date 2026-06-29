@@ -1,0 +1,12 @@
+﻿venv-mlflow/
+venv-dvc/
+venv-streamlit/
+mlruns/
+models/
+.git/
+.dvc/
+__pycache__/
+*.pt
+*.db
+*.log
+*.tmp

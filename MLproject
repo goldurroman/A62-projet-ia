@@ -1,0 +1,11 @@
+﻿name: yolo-segmentation-project
+
+python_env:
+  type: none
+
+entry_points:
+  train:
+    parameters:
+      epochs: {type: int, default: 20}
+      imgsz: {type: int, default: 640}
+    command: "python src/train.py --epochs {epochs} --imgsz {imgsz}"
