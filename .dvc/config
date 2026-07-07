@@ -1,0 +1,8 @@
+[core]
+    remote = minio-storage
+['remote "minio-storage"']
+    url = s3://dvc-remote
+    endpointurl = http://localhost:9000
+    access_key_id = minioadmin
+    secret_access_key = minioadmin
+    use_ssl = false

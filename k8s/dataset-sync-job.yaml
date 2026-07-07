@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dataset-sync
+  labels:
+    app: dataset-sync
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: dataset-sync
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: sync-worker
+        image: romangoldur/a62-sync:v12
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        volumeMounts:
+        - name: dataset-volume
+          mountPath: /workspace
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: dataset-volume
+        persistentVolumeClaim:
+          claimName: dataset-pvc

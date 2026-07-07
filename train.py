@@ -15,8 +15,8 @@ from ultralytics import YOLO
 # CONFIG (centralisé)
 # =========================
 
-MODEL_NAME = "yolov8n-seg.pt"   # yolov8n-seg.pt, yolov8s-seg.pt, yolov8m-seg.pt
-IMG_SIZE = 384                  # 256, 512, 640, 768...
+MODEL_NAME = "yolov8s-seg.pt"   # yolov8n-seg.pt, yolov8s-seg.pt, yolov8m-seg.pt
+IMG_SIZE = 512                  # 256, 512, 640, 768...
 COLOR_MODE = "rgb"              # "rgb" ou "gray"
 EPOCHS = 10                     # nombre d'époques
 PATIENCE = 5                   # early stopping patience
