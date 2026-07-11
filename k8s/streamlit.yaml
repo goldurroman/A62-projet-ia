@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-creds
+type: Opaque
+stringData:
+  aws_access_key_id: "minioadmin"
+  aws_secret_access_key: "minioadmin"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamlit-app
+  labels:
+    app: streamlit-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamlit-app
+
+  template:
+    metadata:
+      labels:
+        app: streamlit-app
+
+    spec:
+      containers:
+      - name: streamlit-app
+        image: romangoldur/skin-lesion-app:v1
+        imagePullPolicy: Never
+
+        ports:
+        - containerPort: 8501
+
+        # 🔒 Ressources pour éviter OOMKilled et CPU saturation
+        resources:
+          requests:
+            cpu: "1"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "2Gi"
+
+        env:
+        - name: MINIO_ENDPOINT_URL
+          value: "http://minio-service.default.svc.cluster.local:9000"
+
+        - name: MODEL_PATH
+          value: "/app/models/yolov8m-seg-best.pt"
+
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: aws_access_key_id
+
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: aws_secret_access_key
+
+        - name: GIT_PYTHON_REFRESH
+          value: "quiet"
+
+        # 🟢 startupProbe : laisse le temps à PyTorch + YOLO de charger
+        startupProbe:
+          httpGet:
+            path: /
+            port: 8501
+          failureThreshold: 12   # 12 * 5s = 60s max
+          periodSeconds: 5
+
+        # 🟡 readinessProbe : indique quand l'app est prête
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          initialDelaySeconds: 2
+          periodSeconds: 10
+
+        # 🔵 livenessProbe : vérifie que l'app ne freeze pas
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          initialDelaySeconds: 5
+          periodSeconds: 20
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamlit-service
+  labels:
+    app: streamlit-app
+spec:
+  type: NodePort
+  selector:
+    app: streamlit-app
+
+  ports:
+  - port: 8501
+    targetPort: 8501
+    nodePort: 30010
