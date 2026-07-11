@@ -5,6 +5,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  volumeMode: Filesystem
   resources:
     requests:
-      storage: 10Gi
+      storage: 2Gi # Doit être inférieur ou égal à la capacité du PV
+  storageClassName: manual # Crucial : force la liaison directe avec dataset-pv

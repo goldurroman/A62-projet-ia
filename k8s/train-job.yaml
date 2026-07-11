@@ -1,0 +1,75 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-${JOB_NAME}
+  labels:
+    app: train-yolo
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 7200
+  template:
+    metadata:
+      labels:
+        app: train-yolo
+    spec:
+      restartPolicy: Never
+
+      containers:
+      - name: ${CONTAINER_NAME}
+        image: romangoldur/a62-train:v3
+        imagePullPolicy: Never
+        workingDir: /app
+        resources:
+          requests:
+            cpu: "1"
+            memory: "3Gi"
+          limits:
+            cpu: "2"
+            memory: "8Gi"
+
+        env:
+        - name: GIT_PYTHON_REFRESH
+          value: "quiet"
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow-service:5000"
+        - name: MLFLOW_EXPERIMENT_NAME
+          value: "projet-synthese"
+
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: "http://minio-service:9000"
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: MLFLOW_S3_IGNORE_TLS
+          value: "true"
+
+        # Hyperparamètres dynamiques
+        - name: MODEL_NAME
+          value: "${MODEL_NAME}"
+        - name: IMG_SIZE
+          value: "${IMG_SIZE}"
+        - name: COLOR_MODE
+          value: "${COLOR_MODE}"
+        - name: EPOCHS
+          value: "${EPOCHS}"
+        - name: PATIENCE
+          value: "10"
+
+        # Identifiant sémantique global
+        - name: RUN_NAME
+          value: "${JOB_NAME}"
+
+        volumeMounts:
+        - name: dataset-storage
+          mountPath: /app/data
+        - name: workdir
+          mountPath: /app/workdir
+
+      volumes:
+      - name: dataset-storage
+        persistentVolumeClaim:
+          claimName: dataset-pvc
+
+      - name: workdir
+        emptyDir: {}

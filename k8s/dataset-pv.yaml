@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dataset-pv
+spec:
+  capacity:
+    storage: 2Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual # Crucial : doit correspondre exactement au PVC
+  hostPath:
+    path: "/run/desktop/mnt/host/c/temp/A62-projet-ia/data"
+    type: DirectoryOrCreate

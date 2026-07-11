@@ -3,8 +3,11 @@ venv-dvc/
 venv-streamlit/
 mlruns/
 models/
+data/
 .git/
-.dvc/
+#.dvc/
+.dvc/cache/
+.dvc/tmp/
 __pycache__/
 *.pt
 *.db

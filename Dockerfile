@@ -26,6 +26,14 @@ RUN apt-get update && apt-get install -y \
 # ---------------------------------------------------------
 COPY requirements-mlflow.txt /app/
 RUN pip install --no-cache-dir -r requirements-mlflow.txt
+# Installer explicitement DVC avec l'extension s3 (nécessaire pour MinIO)
+RUN pip install --no-cache-dir "dvc[s3]"
+# Copier explicitement le dossier de configuration DVC à l'intérieur de l'image
+COPY .dvc /app/.dvc
+
+RUN git init /app && \
+    git config --global user.email "student@college.ca" && \
+    git config --global user.name "Student"
 
 # ---------------------------------------------------------
 # Copie des scripts principaux (train.py, gen_container_name.py)
@@ -41,7 +49,7 @@ COPY src /app/src
 # ---------------------------------------------------------
 # Copie des données (ISIC)
 # ---------------------------------------------------------
-COPY data /app/data
+#COPY data /app/data
 
 # ---------------------------------------------------------
 # Copie des fichiers de configuration

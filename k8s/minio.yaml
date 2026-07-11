@@ -12,7 +12,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: projet-synthese
+  name: minio
   labels:
     app: minio
 spec:

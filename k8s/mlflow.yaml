@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mlflow-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: hostpath
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  labels:
+    app: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      initContainers:
+      - name: init-mlflow-db
+        image: busybox:latest
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo "[INIT] Vérification de la base SQLite..."
+            if [ ! -f /mlflow-data/mlflow.db ]; then
+              echo "[INIT] Fichier mlflow.db absent. Création en cours..."
+              touch /mlflow-data/mlflow.db
+              chmod 666 /mlflow-data/mlflow.db
+            else
+              echo "[INIT] La base SQLite existe déjà."
+            fi
+        volumeMounts:
+        - name: mlflow-storage
+          mountPath: /mlflow-data
+
+      - name: setup-minio-bucket
+        image: minio/mc:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "[INIT] Configuration du client MinIO (mc)..."
+            mc alias set myminio http://minio-service:9000 minioadmin minioadmin
+            
+            echo "[INIT] Vérification du bucket 'mlflow-artifacts'..."
+            if mc ls myminio/mlflow-artifacts > /dev/null 2>&1; then
+              echo "[INIT] Le bucket existe déjà."
+            else
+              echo "[INIT] Création du bucket 'mlflow-artifacts'..."
+              mc mb myminio/mlflow-artifacts
+            fi
+            
+            echo "[INIT] Application de la politique d'accès privée (private)..."
+            mc policy set none myminio/mlflow-artifacts
+            echo "[INIT] Initialisation MinIO terminée avec succès."
+        volumeMounts:
+        - name: mlflow-storage
+          mountPath: /mlflow-data
+
+      containers:
+      - name: mlflow # <--- Donne "k8s_mlflow_projet-synthese..."
+        image: romangoldur/mlflow:v2 # <--- Image officielle, consistante avec minio/minio, sans tag manuel
+        imagePullPolicy: Never
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          mlflow server \
+            --host 0.0.0.0 \
+            --port 5000 \
+            --backend-store-uri sqlite:////mlflow-data/mlflow.db \
+            --default-artifact-root s3://mlflow-artifacts/
+        ports:
+        - containerPort: 5000
+        env:
+        - name: MLFLOW_ALLOWED_HOSTS
+          value: '["*"]'
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: "http://minio-service:9000"
+        - name: MLFLOW_S3_IGNORE_TLS
+          value: "true"
+        volumeMounts:
+        - name: mlflow-storage
+          mountPath: /mlflow-data
+      volumes:
+      - name: mlflow-storage
+        persistentVolumeClaim:
+          claimName: mlflow-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-service
+spec:
+  type: NodePort
+  ports:
+    - port: 5000
+      targetPort: 5000
+      nodePort: 30500
+  selector:
+    app: mlflow

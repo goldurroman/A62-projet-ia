@@ -30,3 +30,6 @@ models.lnk
 python.bat
 python310.exe
 
+k8s/generated/
+*.yaml
+*.txt
