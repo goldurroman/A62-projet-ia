@@ -5,7 +5,8 @@ FROM python:3.10.14-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    FEAST_USAGE=False
 
 # ============================================================
 # 2. System dependencies
@@ -29,15 +30,21 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install \
-    streamlit==1.32.0 \
     ultralytics==8.3.5 \
     opencv-python-headless==4.9.0.80 \
     pillow==10.2.0 \
     numpy==1.26.4 \
+    pandas==1.5.3 \
+    pyarrow==11.0.0 \
+    dask==2023.3.1 \
     matplotlib==3.8.2 \
     boto3==1.34.84 \
     botocore==1.34.84 \
-    requests==2.31.0
+    requests==2.31.0 \
+    feast==0.31.1 \
+    redis==5.0.1 \
+    s3fs==2024.3.1 \
+    streamlit==1.32.0
 
 # ============================================================
 # 4. Copy application code (sans modèle)

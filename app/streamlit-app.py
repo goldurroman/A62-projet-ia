@@ -302,6 +302,131 @@ if uploaded_file is not None:
         else:
             scores_morpho, cnt = compute_morphology_scores(binary_mask)
 
+            # ============================================================
+            #  FEAST : Ingestion des features YOLO (offline S3 + online Redis)
+            # ============================================================
+            log.info("[FEAST] Initialisation du FeatureStore via configuration centralisée...")
+
+            try:
+                # Import des modules Feast requis pour l'initialisation à la volée
+                from feast import FeatureStore
+                from feast.repo_config import RepoConfig
+                from feast.infra.online_stores.redis import RedisOnlineStoreConfig
+                import pandas as pd
+                from datetime import datetime
+                import boto3
+                import uuid
+                import os
+                import warnings
+                from urllib3.exceptions import InsecureRequestWarning
+
+                # 1. Force la désactivation de la télémétrie Feast au niveau système
+                os.environ["FEAST_USAGE"] = "False"
+
+                # 2. Bloque l'affichage de tous les warnings de certificats/hostnames dans la console
+                warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+                warnings.filterwarnings("ignore", message="Certificate did not match expected hostname")
+
+                # 1. Configuration des variables d'environnement lues par Feast/S3FS/Boto3
+                # Récupération des clés (depuis Kubernetes Secrets ou valeurs par défaut)
+                minio_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+                minio_secret = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+                minio_endpoint = "http://minio-service:9000"
+
+                os.environ["AWS_ACCESS_KEY_ID"] = minio_key
+                os.environ["AWS_SECRET_ACCESS_KEY"] = minio_secret
+                os.environ["FEAST_S3_ENDPOINT_URL"] = minio_endpoint
+
+                # Patching de Boto3 pour forcer toutes les requêtes (y compris HeadBucket) sur MinIO
+                boto3.setup_default_session(
+                    aws_access_key_id=minio_key,
+                    aws_secret_access_key=minio_secret,
+                )
+
+                config = RepoConfig(
+                    project="a62_project_synthese",
+                    provider="local",
+                    registry="s3://feast-registry/registry.db",
+                    online_store=RedisOnlineStoreConfig(
+                        connection_string="redis-service.default.svc.cluster.local:6379"
+                    ),
+                    s3_endpoint_url=minio_endpoint,  # Force le endpoint pour le registre
+                    entity_key_serialization_version=2
+                )
+
+                # Initialisation du magasin de caractéristiques
+                store = FeatureStore(config=config)
+                log.info("[FEAST] FeatureStore centralisé initialisé avec succès depuis S3/MinIO.")
+
+                # Identifiant unique pour la lésion (UUID propre au drift tracking)
+                lesion_id = uuid.uuid4().hex[:8]
+                event_timestamp = datetime.utcnow()
+
+                # Construction du vecteur de caractéristiques morphologiques OpenCV
+                feast_row = {
+                    "lesion_id": str(lesion_id),
+                    "event_timestamp": event_timestamp,
+                    "compactness": float(scores_morpho["compactness"]),
+                    "asymmetry": float(scores_morpho["asymmetry"]),
+                    "diameter_px": float(scores_morpho["diameter"]),
+                    "suspicion_score": float(compute_global_suspicion_score(scores_morpho)),
+                }
+
+                df_feast = pd.DataFrame([feast_row])
+
+                # ============================================================
+                #  OFFLINE STORE → MinIO (S3)
+                # ============================================================
+                log.info("[FEAST] Tentative écriture OFFLINE → s3://feast-offline/lesion_morphology.parquet")
+
+                try:
+                    s3 = boto3.client(
+                        "s3",
+                        endpoint_url="http://minio-service:9000",
+                        aws_access_key_id=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+                        aws_secret_access_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+                    )
+
+                    import io
+
+                    buffer = io.BytesIO()
+                    df_feast.to_parquet(buffer, index=False)
+                    buffer.seek(0)
+
+                    s3.put_object(
+                        Bucket="feast-offline",
+                        Key="lesion_morphology.parquet",
+                        Body=buffer.getvalue(),
+                        ContentType="application/octet-stream",
+                    )
+                    log.info("[FEAST] Écriture OFFLINE S3 complétée.")
+
+                except Exception as e:
+                    log.error(f"[FEAST][OFFLINE-S3] ERREUR écriture offline S3: {e}", exc_info=True)
+
+                # ============================================================
+                #  ONLINE STORE → Redis
+                # ============================================================
+                log.info("[FEAST] Tentative écriture ONLINE (Redis)...")
+
+                try:
+                    # Pousse directement le vecteur de features calculé dans le cache Redis
+                    store.write_to_online_store(
+                        feature_view_name="lesion_morphology",
+                        df=df_feast,
+                    )
+                    log.info(f"[FEAST] Écriture ONLINE réussie pour lesion_id: {lesion_id}")
+                    st.success(f"⚡ [MLOps] Caractéristiques indexées dans Feast UI (ID: {lesion_id})")
+                except Exception as e:
+                    log.error(f"[FEAST][ONLINE] ERREUR écriture online: {e}", exc_info=True)
+
+            except Exception as e:
+                log.error(f"[FEAST] ERREUR globale initialisation FeatureStore: {e}", exc_info=True)
+
+            # ============================================================
+            #  FIN FEAST
+            # ============================================================
+
             if scores_morpho is not None:
                 # Fig 2 : Contours
                 hull = cv2.convexHull(cnt)
@@ -373,7 +498,7 @@ if uploaded_file is not None:
                 st.write(f"· **Diamètre (px) :** {diam:.1f}")
 
                 suspicion_score = compute_global_suspicion_score(scores_morpho)
-                st.write(f"\n☒ **Score global de suspicion :** {suspicion_score:.1f} / 100")
+                st.write(f"\n **Score global de suspicion :** {suspicion_score:.1f} / 100")
 
                 st.markdown("---")
                 st.subheader("🖼️ Overlay final : image + masque YOLOv8-seg")
@@ -397,14 +522,17 @@ if uploaded_file is not None:
 
                 if niveau == "élevé":
                     st.write("🔎 **Niveau de complexité morphologique : ÉLEVÉ**")
+                    log.info(f"[SCORE] Niveau de complexité morphologique : ÉLEVÉ")
                     st.write("   La lésion présente plusieurs caractéristiques géométriques atypiques")
                     st.write("   (asymétrie, bords irréguliers et/ou grande taille).")
                 elif niveau == "modéré":
                     st.write("🔎 **Niveau de complexité morphologique : MODÉRÉ**")
+                    log.info(f"[SCORE] Niveau de complexité morphologique : MODÉRÉ")
                     st.write("   Certaines caractéristiques géométriques sont un peu atypiques, ")
                     st.write("   mais cela ne signifie PAS qu'il s'agit d'une lésion dangereuse.")
                 else:
                     st.write("🔎 **Niveau de complexité morphologique : FAIBLE**")
+                    log.info(f"[SCORE] Niveau de complexité morphologique : FAIBLE")
                     st.write("   La lésion apparaît géométriquement simple et plutôt régulière.")
 
                 st.write("\n❗ **Important :**")

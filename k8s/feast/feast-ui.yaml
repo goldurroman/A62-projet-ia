@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feast-ui
+  labels:
+    app: feast-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feast-ui
+  template:
+    metadata:
+      labels:
+        app: feast-ui
+    spec:
+      containers:
+        - name: feast-ui
+          image: romangoldur/feast-repo:v1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cd /feast/repo && \
+              feast ui --host 0.0.0.0 --port 8080
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: "minioadmin"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "minioadmin"
+            - name: FEAST_S3_ENDPOINT_URL
+              value: "http://minio-service:9000"
+          ports:
+            - containerPort: 8080
+          #volumeMounts:
+          # - name: feast-repo
+          #  mountPath: /feast/repo
+      volumes:
+        - name: feast-repo
+          persistentVolumeClaim:
+            claimName: feast-repo-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feast-ui-service
+spec:
+  type: NodePort
+  selector:
+    app: feast-ui
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30020
