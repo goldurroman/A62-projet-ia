@@ -8,9 +8,9 @@ Write-Host "[DATASET] Train=$TRAIN_COUNT | Val=$VAL_COUNT" -ForegroundColor Gree
 
 # 2. Matrice
 $MODELS       = @("yolov8n-seg.pt") # yolov8s-seg.pt, yolov8m-seg.pt
-$IMG_SIZES    = @("256") #  128 256 384 512 640 768
+$IMG_SIZES    = @("384") #  128 256 384 512 640 768
 $COLOR_MODES  = @("gray", "rgb") # gray, rgb
-$EPOCHS_LIST  = @("7", "9") # 15 20 50 100 150 200
+$EPOCHS_LIST  = @("2") # 15 20 50 100 150 200
 
 if (!(Test-Path "k8s/generated")) { New-Item -ItemType Directory -Path "k8s/generated" | Out-Null }
 

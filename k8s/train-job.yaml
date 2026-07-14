@@ -16,8 +16,8 @@ spec:
 
       containers:
       - name: ${CONTAINER_NAME}
-        image: romangoldur/a62-train:v3
-        imagePullPolicy: Never
+        image: romangoldur/a62-train:v8
+        imagePullPolicy: Always
         workingDir: /app
         resources:
           requests:
