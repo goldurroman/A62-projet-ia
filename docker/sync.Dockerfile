@@ -26,6 +26,7 @@ RUN chmod +x /app/debug.sh
 
 
 # Copier le projet dans l'image
+COPY .dvc /app/.dvc
 COPY docker/sync.py /app/sync.py
 COPY src /app/src
 COPY data /app/data

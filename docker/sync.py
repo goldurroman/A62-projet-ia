@@ -2,6 +2,7 @@
 import os
 import sys
 import logging
+import shutil
 import subprocess
 import urllib.request
 import urllib.error
@@ -13,7 +14,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 
-BUCKET_NAME = "dvc-remote"
+BUCKET_NAME = "dvc-store"
 ENDPOINT_URL = "http://minio-service:9000"
 WORKSPACE_DIR = "/workspace"
 
@@ -54,7 +55,7 @@ def verifier_reseau():
 
 
 def garantir_bucket_minio():
-    """Assure l'existence du bucket dvc-remote via s3fs (garanti présent avec dvc-s3)."""
+    """Assure l'existence du bucket dvc-store via s3fs (garanti présent avec dvc-s3)."""
     logging.info(f"[MINIO] Validation de l'existence du bucket '{BUCKET_NAME}'...")
     try:
         import s3fs
@@ -100,7 +101,12 @@ def synchroniser():
     """Gère la récupération ou la publication des données."""
     # Unique endroit où l'on synchronise le fichier de suivi
     if os.path.exists("/app/data.dvc"):
-        run("cp -f /app/data.dvc /workspace/", cwd=WORKSPACE_DIR)
+        src = os.path.abspath("/app/data.dvc")
+        dest = os.path.abspath(os.path.join(WORKSPACE_DIR, os.path.basename("/app/data.dvc")))
+        if src != dest:
+            run(f"cp -f /app/data.dvc {WORKSPACE_DIR}/", cwd=WORKSPACE_DIR)
+        else:
+            logging.info("[DVC] data.dvc already inside workspace; skipping copy.")
 
     try:
         logging.info("[DVC] Tentative de récupération des données existantes (dvc pull)...")
@@ -109,12 +115,28 @@ def synchroniser():
     except RuntimeError:
         logging.warning("[DVC] Cache distant manquant ou incomplet. Réalignement complet du workspace...")
 
-        # SÉCURITÉ K8sOps : Force brute de nettoyage des structures instables
-        # On supprime le dossier data, le cache ET l'index de DVC pour repartir de zéro
-        run("rm -rf /workspace/data /workspace/.dvc/cache /workspace/.dvc/index", cwd=WORKSPACE_DIR)
+        # SÉCURITÉ K8sOps : Nettoyage sans supprimer le point de montage PVC
+        data_dir = os.path.join(WORKSPACE_DIR, "data")
+        if os.path.isdir(data_dir):
+            for name in os.listdir(data_dir):
+                path = os.path.join(data_dir, name)
+                try:
+                    if os.path.isdir(path) and not os.path.islink(path):
+                        shutil.rmtree(path)
+                    else:
+                        os.remove(path)
+                except Exception as cleanup_err:
+                    logging.warning(f"[CLEANUP] Impossible de supprimer {path} : {cleanup_err}")
+
+        cache_dir = os.path.join(WORKSPACE_DIR, ".dvc", "cache")
+        index_dir = os.path.join(WORKSPACE_DIR, ".dvc", "index")
+        if os.path.isdir(cache_dir):
+            shutil.rmtree(cache_dir, ignore_errors=True)
+        if os.path.isdir(index_dir):
+            shutil.rmtree(index_dir, ignore_errors=True)
 
         logging.info("[TRANSFERT] Copie des images locales de l'image Docker vers le volume persistant...")
-        run("cp -rf /app/data /workspace/", cwd=WORKSPACE_DIR)
+        run(f"cp -rf /app/data {WORKSPACE_DIR}/", cwd=WORKSPACE_DIR)
 
         logging.info("[DVC] Indexation locale des données transférées...")
         run("dvc add data", cwd=WORKSPACE_DIR)

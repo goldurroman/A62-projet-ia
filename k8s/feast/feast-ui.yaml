@@ -29,6 +29,10 @@ spec:
               value: "minioadmin"
             - name: FEAST_S3_ENDPOINT_URL
               value: "http://minio-service:9000"
+            - name: AWS_ENDPOINT_URL
+              value: "http://minio-service:9000"
+            - name: S3_ENDPOINT_URL
+              value: "http://minio-service:9000"
           ports:
             - containerPort: 8080
           #volumeMounts:

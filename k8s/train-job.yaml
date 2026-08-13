@@ -24,7 +24,7 @@ spec:
             cpu: "1"
             memory: "3Gi"
           limits:
-            cpu: "2"
+            cpu: "4"
             memory: "8Gi"
 
         env:
@@ -65,11 +65,17 @@ spec:
           mountPath: /app/data
         - name: workdir
           mountPath: /app/workdir
+        - name: dshm
+          mountPath: /dev/shm
 
       volumes:
-      - name: dataset-storage
-        persistentVolumeClaim:
-          claimName: dataset-pvc
-
-      - name: workdir
-        emptyDir: {}
+        - name: dataset-storage
+          persistentVolumeClaim:
+            claimName: dataset-pvc
+        - name: workdir
+          emptyDir: { }
+        # --- AJOUT OBLIGATOIRE POUR PYTORCH ---
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "2Gi"

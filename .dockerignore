@@ -3,7 +3,7 @@ venv-dvc/
 venv-streamlit/
 mlruns/
 models/
-data/
+#data/
 .git/
 #.dvc/
 .dvc/cache/

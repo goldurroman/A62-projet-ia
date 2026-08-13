@@ -13,26 +13,40 @@ spec:
         app: dataset-sync
     spec:
       restartPolicy: OnFailure
-
       initContainers:
-      - name: init-dataset-dir
-        image: romangoldur/a62-sync:v13
-        imagePullPolicy: IfNotPresent
-        command: ["sh", "-c"]
-        args:
-          - |
-            echo "[INIT] Initialisation et ouverture des droits du volume Linux..."
-            mkdir -p /app/data
-            chmod -R 777 /app/data
-            echo "[INIT] Volume prêt pour DVC."
-        volumeMounts:
-        - name: dataset-volume
-          mountPath: /app/data
+        - name: create-dvc-bucket
+          image: minio/mc
+          env:
+            - name: MINIO_ROOT_USER
+              value: "minioadmin"
+            - name: MINIO_ROOT_PASSWORD
+              value: "minioadmin"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Utilisation du DNS interne K8s : minio-service:9000
+              mc alias set myminio http://minio-service:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+              mc mb --ignore-existing myminio/dvc-store
+
+        - name: init-dataset-dir
+          image: romangoldur/a62-sync:v13
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "[INIT] Initialisation et ouverture des droits du volume Linux..."
+              mkdir -p /workspace/data
+              chmod -R 777 /workspace/data
+              echo "[INIT] Volume prêt pour DVC."
+          volumeMounts:
+          - name: dataset-volume
+            mountPath: /workspace/data
 
       containers:
       - name: sync-worker
         image: romangoldur/a62-sync:v13
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
 
         securityContext:
           runAsUser: 0
@@ -48,27 +62,9 @@ spec:
 
         volumeMounts:
         - name: dataset-volume
-          mountPath: /app/data
+          mountPath: /workspace/data
 
-        command: ["/bin/sh"]
-        args:
-          - "-c"
-          - |
-            echo "[SYNC] === Démarrage de la synchronisation ==="
-            cd /app || exit 1
-
-            echo "[SYNC] Structure interne de /app dans l'image :"
-            ls -la
-
-            echo "[SYNC] Lancement du dvc pull..."
-            dvc pull --verbose
-            if [ $? -ne 0 ]; then
-                echo "[SYNC][ERROR] Échec du dvc pull"
-                exit 1
-            fi
-
-            echo "[SYNC] === Succès ! Fichiers synchronisés ==="
-            ls -R /app/data
+        command: ["python", "/app/sync.py"]
 
         resources:
           requests:

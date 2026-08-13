@@ -26,13 +26,27 @@ spec:
       containers:
         - name: feast-sync-worker
           image: romangoldur/feast-repo:v1
+          imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-c"]
           args:
             - |
-              pip install feast==0.31.1 boto3==1.34.84 botocore==1.34.84 && \
-              cd /feast/repo && \
-              feast apply && \
-              feast materialize-incremental $(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-7 days")
+              set -e
+              echo "[INFO] =========================================="
+              echo "[INFO] DEBUT DU JOB FEAST-SYNC - $(date -u)"
+              echo "[INFO] =========================================="
+              
+              cd /feast/repo
+              
+              echo "[INFO] [1/2] Execution de 'feast apply'..."
+              feast apply
+              
+              TARGET_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S" -d "-7 days")
+              echo "[INFO] [2/2] Execution de 'feast materialize-incremental' ($TARGET_DATE)..."
+              feast materialize-incremental "$TARGET_DATE"
+              
+              echo "[INFO] =========================================="
+              echo "[INFO] JOB FEAST-SYNC TERMINE AVEC SUCCES"
+              echo "[INFO] =========================================="
           env:
             - name: AWS_ACCESS_KEY_ID
               value: "minioadmin"
@@ -40,11 +54,5 @@ spec:
               value: "minioadmin"
             - name: FEAST_S3_ENDPOINT_URL
               value: "http://minio-service:9000"
-          volumeMounts:
-            - name: feast-repo
-              mountPath: /feast/repo
-
-      volumes:
-        - name: feast-repo
-          persistentVolumeClaim:
-            claimName: feast-repo-pvc
+            - name: AWS_ENDPOINT_URL
+              value: "http://minio-service:9000"

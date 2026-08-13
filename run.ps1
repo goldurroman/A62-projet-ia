@@ -7,10 +7,10 @@ $VAL_COUNT   = (Get-ChildItem -Path "C:\temp\A62-projet-ia\data\val\images" -Fil
 Write-Host "[DATASET] Train=$TRAIN_COUNT | Val=$VAL_COUNT" -ForegroundColor Green
 
 # 2. Matrice
-$MODELS       = @("yolov8n-seg.pt") # yolov8s-seg.pt, yolov8m-seg.pt
-$IMG_SIZES    = @("384") #  128 256 384 512 640 768
+$MODELS       = @("yolov8n-seg.pt") # yolov8n-seg.pt, yolov8m-seg.pt
+$IMG_SIZES    = @("128") #  128 256 384 512 640 768
 $COLOR_MODES  = @("gray", "rgb") # gray, rgb
-$EPOCHS_LIST  = @("2") # 15 20 50 100 150 200
+$EPOCHS_LIST  = @("3", "2") # 15 20 50 100 150 200
 
 if (!(Test-Path "k8s/generated")) { New-Item -ItemType Directory -Path "k8s/generated" | Out-Null }
 
